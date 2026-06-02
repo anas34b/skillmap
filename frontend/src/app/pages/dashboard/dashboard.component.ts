@@ -10,6 +10,7 @@ import {
 } from '@angular/core';
 import { Chart, registerables } from 'chart.js';
 
+import { environment } from '../../../environments/environment';
 import { SkillMapService } from '../../services/skillmap.service';
 import {
   CityDTO,
@@ -41,16 +42,26 @@ export class DashboardComponent implements OnInit, AfterViewInit {
   readonly error = signal<string | null>(null);
 
   ngOnInit(): void {
-    this.api.getStats().subscribe({
-      next: (s) => this.stats.set(s),
-      error: (e) => this.error.set(this.describe(e)),
-    });
+    this.loadAll();
+  }
 
+  ngAfterViewInit(): void {
+    this.viewReady = true;
+    this.renderChart();
+  }
+
+  /** (Re)charge toutes les données. Le service réessaie tout seul pendant le cold start. */
+  loadAll(): void {
+    this.loading.set(true);
+    this.error.set(null);
+
+    // topSkills = donnée principale : pilote le loader et le graphique
     this.api.getTopSkills(20).subscribe({
       next: (skills) => {
         this.topSkills.set(skills);
         this.loading.set(false);
-        this.renderChart();
+        // différé : laisse Angular afficher le <canvas> avant de dessiner
+        setTimeout(() => this.renderChart());
       },
       error: (e) => {
         this.error.set(this.describe(e));
@@ -58,20 +69,9 @@ export class DashboardComponent implements OnInit, AfterViewInit {
       },
     });
 
-    this.api.getInsights().subscribe({
-      next: (i) => this.insights.set(i),
-      error: (e) => this.error.set(this.describe(e)),
-    });
-
-    this.api.getCities(undefined, 10).subscribe({
-      next: (c) => this.cities.set(c),
-      error: (e) => this.error.set(this.describe(e)),
-    });
-  }
-
-  ngAfterViewInit(): void {
-    this.viewReady = true;
-    this.renderChart();
+    this.api.getStats().subscribe({ next: (s) => this.stats.set(s), error: () => {} });
+    this.api.getInsights().subscribe({ next: (i) => this.insights.set(i), error: () => {} });
+    this.api.getCities(undefined, 10).subscribe({ next: (c) => this.cities.set(c), error: () => {} });
   }
 
   // ── UI helpers ────────────────────────────────────────────
@@ -117,7 +117,7 @@ export class DashboardComponent implements OnInit, AfterViewInit {
           {
             label: 'Mentions',
             data: skills.map((s) => s.mentionCount),
-            backgroundColor: 'rgba(56, 189, 248, 0.55)', // sky-400
+            backgroundColor: 'rgba(56, 189, 248, 0.55)',
             hoverBackgroundColor: 'rgba(56, 189, 248, 0.85)',
             borderColor: 'rgba(56, 189, 248, 1)',
             borderWidth: 1,
@@ -126,26 +126,16 @@ export class DashboardComponent implements OnInit, AfterViewInit {
         ],
       },
       options: {
-        indexAxis: 'y', // bar chart horizontal
+        indexAxis: 'y',
         responsive: true,
         maintainAspectRatio: false,
         plugins: {
           legend: { display: false },
-          tooltip: {
-            backgroundColor: '#0f172a',
-            borderColor: '#334155',
-            borderWidth: 1,
-          },
+          tooltip: { backgroundColor: '#0f172a', borderColor: '#334155', borderWidth: 1 },
         },
         scales: {
-          x: {
-            grid: { color: 'rgba(148, 163, 184, 0.12)' },
-            ticks: { color: '#94a3b8' },
-          },
-          y: {
-            grid: { display: false },
-            ticks: { color: '#cbd5e1', font: { size: 12 } },
-          },
+          x: { grid: { color: 'rgba(148, 163, 184, 0.12)' }, ticks: { color: '#94a3b8' } },
+          y: { grid: { display: false }, ticks: { color: '#cbd5e1', font: { size: 12 } } },
         },
       },
     });
@@ -154,7 +144,7 @@ export class DashboardComponent implements OnInit, AfterViewInit {
   private describe(err: unknown): string {
     const e = err as { status?: number; message?: string };
     return e?.status === 0
-      ? 'Backend injoignable (http://localhost:8081). Le backend est-il démarré ?'
+      ? `Impossible de joindre le backend (${environment.apiBaseUrl}).`
       : `Erreur ${e?.status ?? ''} : ${e?.message ?? 'inconnue'}`;
   }
 }

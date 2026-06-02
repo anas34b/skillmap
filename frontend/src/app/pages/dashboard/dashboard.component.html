@@ -33,130 +33,139 @@
             <dd class="mt-1 text-sm font-semibold text-slate-200">{{ s.lastUpdated }}</dd>
           </div>
         </dl>
-      } @else if (!error()) {
-        <p class="mt-8 text-slate-500">Chargement des statistiques…</p>
       }
     </div>
   </header>
 
   <main class="mx-auto max-w-7xl px-6 py-8">
-    @if (error(); as err) {
-      <div class="mb-6 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-amber-300">
-        ⚠️ {{ err }}
+    @if (loading()) {
+      <!-- ── Écran de chargement (absorbe le cold start Cloud Run) ── -->
+      <div class="flex min-h-[55vh] flex-col items-center justify-center gap-4 text-center">
+        <div class="h-12 w-12 animate-spin rounded-full border-4 border-slate-700 border-t-sky-400"></div>
+        <p class="text-lg font-medium text-slate-200">Connexion au serveur…</p>
+        <p class="max-w-md text-sm text-slate-500">
+          Le serveur peut mettre jusqu'à ~1 minute à se réveiller s'il était en veille.
+          Le chargement reprend automatiquement, merci de patienter.
+        </p>
       </div>
-    }
-
-    <!-- ── Bar chart : Top 20 compétences ───────────────────── -->
-    <section class="rounded-2xl border border-slate-800 bg-slate-900/50 p-6">
-      <div class="mb-4 flex items-baseline justify-between">
-        <h2 class="text-lg font-semibold text-white">Top 20 compétences les plus demandées</h2>
-        <span class="text-xs text-slate-500">par nombre d'offres ce mois</span>
+    } @else if (error()) {
+      <!-- ── Erreur (après plusieurs tentatives) ── -->
+      <div class="flex min-h-[45vh] flex-col items-center justify-center gap-4 text-center">
+        <div class="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-amber-300">
+          ⚠️ {{ error() }}
+        </div>
+        <button (click)="loadAll()"
+                class="rounded-lg bg-sky-500 px-4 py-2 font-medium text-white transition-colors hover:bg-sky-400">
+          Réessayer
+        </button>
       </div>
-
-      @if (loading()) {
-        <p class="text-slate-500">Chargement du graphique…</p>
-      } @else if (topSkills().length === 0) {
-        <p class="text-slate-500">Aucune donnée — la collecte n'a pas encore tourné.</p>
-      }
-      <!-- canvas toujours présent pour que le ViewChild le trouve -->
-      <div class="relative h-[520px]" [class.hidden]="topSkills().length === 0">
-        <canvas #skillsChart></canvas>
-      </div>
-    </section>
-
-    <div class="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-5">
-      <!-- ── Tableau top skills avec badges ─────────────────── -->
-      <section class="lg:col-span-3 rounded-2xl border border-slate-800 bg-slate-900/50 p-6">
-        <h2 class="mb-4 text-lg font-semibold text-white">Détail des compétences</h2>
-
-        @if (topSkills().length > 0) {
-          <div class="overflow-hidden rounded-lg border border-slate-800">
-            <table class="min-w-full divide-y divide-slate-800 text-sm">
-              <thead class="bg-slate-900/80 text-left text-xs uppercase tracking-wide text-slate-400">
-                <tr>
-                  <th class="px-4 py-3 font-medium">#</th>
-                  <th class="px-4 py-3 font-medium">Compétence</th>
-                  <th class="px-4 py-3 font-medium">Catégorie</th>
-                  <th class="px-4 py-3 text-right font-medium">Offres</th>
-                  <th class="px-4 py-3 text-right font-medium">Croissance</th>
-                  <th class="px-4 py-3 text-center font-medium">Tendance</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-slate-800">
-                @for (skill of topSkills(); track skill.name; let i = $index) {
-                  <tr class="transition-colors hover:bg-slate-800/40">
-                    <td class="px-4 py-3 text-slate-500">{{ i + 1 }}</td>
-                    <td class="px-4 py-3 font-medium text-white">{{ skill.name }}</td>
-                    <td class="px-4 py-3 text-slate-400">{{ skill.category }}</td>
-                    <td class="px-4 py-3 text-right tabular-nums text-slate-200">{{ skill.mentionCount | number }}</td>
-                    <td class="px-4 py-3 text-right tabular-nums"
-                        [class.text-emerald-400]="skill.growthRate > 0"
-                        [class.text-rose-400]="skill.growthRate < 0"
-                        [class.text-slate-400]="skill.growthRate === 0">
-                      {{ skill.growthRate > 0 ? '+' : '' }}{{ skill.growthRate | number:'1.0-1' }}%
-                    </td>
-                    <td class="px-4 py-3 text-center">
-                      <span class="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium"
-                            [class]="trendBadgeClass(skill.trend)">
-                        {{ trendIcon(skill.trend) }} {{ skill.trend }}
-                      </span>
-                    </td>
-                  </tr>
-                }
-              </tbody>
-            </table>
-          </div>
-        } @else {
-          <p class="text-slate-500">Aucune compétence à afficher.</p>
+    } @else {
+      <!-- ── Bar chart : Top 20 compétences ── -->
+      <section class="rounded-2xl border border-slate-800 bg-slate-900/50 p-6">
+        <div class="mb-4 flex items-baseline justify-between">
+          <h2 class="text-lg font-semibold text-white">Top 20 compétences les plus demandées</h2>
+          <span class="text-xs text-slate-500">par nombre d'offres ce mois</span>
+        </div>
+        @if (topSkills().length === 0) {
+          <p class="text-slate-500">Aucune donnée — la collecte n'a pas encore tourné.</p>
         }
-      </section>
-
-      <!-- ── Insights IA ───────────────────────────────────── -->
-      <section class="lg:col-span-2 rounded-2xl border border-slate-800 bg-slate-900/50 p-6">
-        <h2 class="mb-4 text-lg font-semibold text-white">
-          Insights IA <span class="ml-1 text-base">🤖</span>
-        </h2>
-
-        @if (insights().length === 0) {
-          <p class="text-slate-500">Aucun insight pour l'instant.</p>
-        } @else {
-          <ul class="space-y-3">
-            @for (insight of insights(); track insight.title) {
-              <li class="rounded-lg bg-slate-800/40 p-4" [class]="insightAccent(insight.type)">
-                <div class="flex items-start gap-3">
-                  <span class="text-xl leading-none">{{ insight.icon }}</span>
-                  <div>
-                    <p class="font-semibold text-white">{{ insight.title }}</p>
-                    <p class="mt-1 text-sm text-slate-400">{{ insight.description }}</p>
-                    <span class="mt-2 inline-block rounded bg-slate-700/50 px-2 py-0.5 text-[10px] uppercase tracking-wide text-slate-400">
-                      {{ insight.type }}
-                    </span>
-                  </div>
-                </div>
-              </li>
-            }
-          </ul>
-        }
-      </section>
-    </div>
-
-    <!-- ── Villes (répartition) ───────────────────────────────── -->
-    @if (cities().length > 0) {
-      <section class="mt-6 rounded-2xl border border-slate-800 bg-slate-900/50 p-6">
-        <h2 class="mb-4 text-lg font-semibold text-white">Villes qui recrutent le plus</h2>
-        <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-          @for (city of cities(); track city.city) {
-            <div class="rounded-lg border border-slate-800 bg-slate-900/60 p-3">
-              <p class="truncate font-medium text-white" [title]="city.city">{{ city.city }}</p>
-              <p class="text-sm text-slate-400">{{ city.jobCount | number }} offres · {{ city.percentage | number:'1.0-1' }}%</p>
-            </div>
-          }
+        <div class="relative h-[520px]" [class.hidden]="topSkills().length === 0">
+          <canvas #skillsChart></canvas>
         </div>
       </section>
+
+      <div class="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-5">
+        <!-- ── Tableau top skills avec badges ── -->
+        <section class="lg:col-span-3 rounded-2xl border border-slate-800 bg-slate-900/50 p-6">
+          <h2 class="mb-4 text-lg font-semibold text-white">Détail des compétences</h2>
+          @if (topSkills().length > 0) {
+            <div class="overflow-hidden rounded-lg border border-slate-800">
+              <table class="min-w-full divide-y divide-slate-800 text-sm">
+                <thead class="bg-slate-900/80 text-left text-xs uppercase tracking-wide text-slate-400">
+                  <tr>
+                    <th class="px-4 py-3 font-medium">#</th>
+                    <th class="px-4 py-3 font-medium">Compétence</th>
+                    <th class="px-4 py-3 font-medium">Catégorie</th>
+                    <th class="px-4 py-3 text-right font-medium">Offres</th>
+                    <th class="px-4 py-3 text-right font-medium">Croissance</th>
+                    <th class="px-4 py-3 text-center font-medium">Tendance</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-800">
+                  @for (skill of topSkills(); track skill.name; let i = $index) {
+                    <tr class="transition-colors hover:bg-slate-800/40">
+                      <td class="px-4 py-3 text-slate-500">{{ i + 1 }}</td>
+                      <td class="px-4 py-3 font-medium text-white">{{ skill.name }}</td>
+                      <td class="px-4 py-3 text-slate-400">{{ skill.category }}</td>
+                      <td class="px-4 py-3 text-right tabular-nums text-slate-200">{{ skill.mentionCount | number }}</td>
+                      <td class="px-4 py-3 text-right tabular-nums"
+                          [class.text-emerald-400]="skill.growthRate > 0"
+                          [class.text-rose-400]="skill.growthRate < 0"
+                          [class.text-slate-400]="skill.growthRate === 0">
+                        {{ skill.growthRate > 0 ? '+' : '' }}{{ skill.growthRate | number:'1.0-1' }}%
+                      </td>
+                      <td class="px-4 py-3 text-center">
+                        <span class="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium"
+                              [class]="trendBadgeClass(skill.trend)">
+                          {{ trendIcon(skill.trend) }} {{ skill.trend }}
+                        </span>
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          } @else {
+            <p class="text-slate-500">Aucune compétence à afficher.</p>
+          }
+        </section>
+
+        <!-- ── Insights IA ── -->
+        <section class="lg:col-span-2 rounded-2xl border border-slate-800 bg-slate-900/50 p-6">
+          <h2 class="mb-4 text-lg font-semibold text-white">
+            Insights IA <span class="ml-1 text-base">🤖</span>
+          </h2>
+          @if (insights().length === 0) {
+            <p class="text-slate-500">Aucun insight pour l'instant.</p>
+          } @else {
+            <ul class="space-y-3">
+              @for (insight of insights(); track insight.title) {
+                <li class="rounded-lg bg-slate-800/40 p-4" [class]="insightAccent(insight.type)">
+                  <div class="flex items-start gap-3">
+                    <span class="text-xl leading-none">{{ insight.icon }}</span>
+                    <div>
+                      <p class="font-semibold text-white">{{ insight.title }}</p>
+                      <p class="mt-1 text-sm text-slate-400">{{ insight.description }}</p>
+                      <span class="mt-2 inline-block rounded bg-slate-700/50 px-2 py-0.5 text-[10px] uppercase tracking-wide text-slate-400">
+                        {{ insight.type }}
+                      </span>
+                    </div>
+                  </div>
+                </li>
+              }
+            </ul>
+          }
+        </section>
+      </div>
+
+      <!-- ── Villes ── -->
+      @if (cities().length > 0) {
+        <section class="mt-6 rounded-2xl border border-slate-800 bg-slate-900/50 p-6">
+          <h2 class="mb-4 text-lg font-semibold text-white">Villes qui recrutent le plus</h2>
+          <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+            @for (city of cities(); track city.city) {
+              <div class="rounded-lg border border-slate-800 bg-slate-900/60 p-3">
+                <p class="truncate font-medium text-white" [title]="city.city">{{ city.city }}</p>
+                <p class="text-sm text-slate-400">{{ city.jobCount | number }} offres · {{ city.percentage | number:'1.0-1' }}%</p>
+              </div>
+            }
+          </div>
+        </section>
+      }
     }
 
     <footer class="mt-10 pb-6 text-center text-xs text-slate-600">
-      SkillMap · données France Travail &amp; Arbeitnow · backend http://localhost:8081
+      SkillMap · données France Travail &amp; Arbeitnow
     </footer>
   </main>
 </div>
