@@ -1,7 +1,12 @@
 package com.skillmap.config;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.web.embedded.tomcat.TomcatProtocolHandlerCustomizer;
+import org.springframework.cache.Cache;
+import org.springframework.cache.annotation.CachingConfigurer;
 import org.springframework.cache.annotation.EnableCaching;
+import org.springframework.cache.interceptor.CacheErrorHandler;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.cache.RedisCacheConfiguration;
@@ -63,7 +68,36 @@ class ThreadConfig {
 // ─────────────────────────────────────────
 @Configuration
 @EnableCaching
-class RedisConfig {
+class RedisConfig implements CachingConfigurer {
+
+    private static final Logger log = LoggerFactory.getLogger(RedisConfig.class);
+
+    /**
+     * Fail-open : si Redis est indisponible ou si une valeur en cache est illisible,
+     * on logge et on ignore au lieu de propager l'erreur (la méthode est ré-exécutée).
+     * Évite qu'une panne de cache ne casse les endpoints (cf. staging sans Memorystore).
+     */
+    @Override
+    public CacheErrorHandler errorHandler() {
+        return new CacheErrorHandler() {
+            @Override
+            public void handleCacheGetError(RuntimeException e, Cache cache, Object key) {
+                log.warn("Cache GET ignoré ({}#{}) : {}", cache.getName(), key, e.getMessage());
+            }
+            @Override
+            public void handleCachePutError(RuntimeException e, Cache cache, Object key, Object value) {
+                log.warn("Cache PUT ignoré ({}#{}) : {}", cache.getName(), key, e.getMessage());
+            }
+            @Override
+            public void handleCacheEvictError(RuntimeException e, Cache cache, Object key) {
+                log.warn("Cache EVICT ignoré ({}#{}) : {}", cache.getName(), key, e.getMessage());
+            }
+            @Override
+            public void handleCacheClearError(RuntimeException e, Cache cache) {
+                log.warn("Cache CLEAR ignoré ({}) : {}", cache.getName(), e.getMessage());
+            }
+        };
+    }
 
     @Bean
     public RedisTemplate<String, Integer> redisTemplate(RedisConnectionFactory factory) {

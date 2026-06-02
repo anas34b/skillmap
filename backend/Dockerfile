@@ -35,9 +35,10 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD wget -q --spider http://localhost:8080/actuator/health || exit 1
 
-ENTRYPOINT ["java",
-    "-XX:+UseVirtualThreads",
-    "-XX:MaxRAMPercentage=75.0",
-    "-XX:+ExitOnOutOfMemoryError",
-    "-Djava.security.egd=file:/dev/./urandom",
+# NB : pas de flag "-XX:+UseVirtualThreads" (inexistant → JVM refuse de démarrer).
+# Les virtual threads Java 21 sont activés côté application (ThreadConfig + Tomcat).
+ENTRYPOINT ["java", \
+    "-XX:MaxRAMPercentage=75.0", \
+    "-XX:+ExitOnOutOfMemoryError", \
+    "-Djava.security.egd=file:/dev/./urandom", \
     "-jar", "app.jar"]
