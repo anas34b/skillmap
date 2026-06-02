@@ -74,7 +74,9 @@ resource "google_sql_user" "skillmap" {
 # (évite le poule/œuf avec Ansible). Valeurs passées via -var / TF_VAR_*.
 resource "google_secret_manager_secret" "db_password" {
   secret_id = "DB_PASSWORD_${upper(var.env)}"
-  replication { auto {} }
+  replication {
+    auto {}
+  }
 }
 resource "google_secret_manager_secret_version" "db_password" {
   secret      = google_secret_manager_secret.db_password.id
@@ -83,7 +85,9 @@ resource "google_secret_manager_secret_version" "db_password" {
 
 resource "google_secret_manager_secret" "ft_client_id" {
   secret_id = "FT_CLIENT_ID_${upper(var.env)}"
-  replication { auto {} }
+  replication {
+    auto {}
+  }
 }
 resource "google_secret_manager_secret_version" "ft_client_id" {
   count       = var.ft_client_id == "" ? 0 : 1
@@ -93,7 +97,9 @@ resource "google_secret_manager_secret_version" "ft_client_id" {
 
 resource "google_secret_manager_secret" "ft_client_secret" {
   secret_id = "FT_CLIENT_SECRET_${upper(var.env)}"
-  replication { auto {} }
+  replication {
+    auto {}
+  }
 }
 resource "google_secret_manager_secret_version" "ft_client_secret" {
   count       = var.ft_client_secret == "" ? 0 : 1
