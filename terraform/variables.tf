@@ -40,7 +40,8 @@ variable "ft_client_secret" {
 }
 
 # Domaine frontend autorisé en CORS (Firebase Hosting)
+# Site Firebase par défaut = <project-id>.web.app
 variable "frontend_url" {
   type    = string
-  default = "https://skillmap-staging.web.app"
+  default = "https://skillmap-498218.web.app"
 }
