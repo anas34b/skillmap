@@ -1,0 +1,31 @@
+# Secrets — JAMAIS sur Git
+.env
+secrets/
+*.key
+*.pem
+
+# Java / Maven
+backend/target/
+*.class
+*.jar
+*.war
+
+# Node / Angular
+frontend/node_modules/
+frontend/dist/
+frontend/.angular/
+
+# Terraform state — stocké dans GCS
+terraform/.terraform/
+terraform/*.tfstate
+terraform/*.tfstate.backup
+terraform/.terraform.lock.hcl
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db

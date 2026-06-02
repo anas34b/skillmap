@@ -1,0 +1,116 @@
+name: 🚀 Deploy Production
+
+on:
+  push:
+    branches: [main]
+
+env:
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  REGION: europe-west1
+  IMAGE_TAG: ${{ github.sha }}
+  SERVICE_NAME: skillmap-backend-prod
+
+jobs:
+
+  # ── 1. Tests ────────────────────────────────────────────────
+  test:
+    name: 🧪 Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+      - run: cd backend && ./mvnw test -q
+
+  # ── 2. Build Docker ──────────────────────────────────────────
+  build:
+    name: 🐳 Build & Push Docker
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+      - run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+      - run: |
+          IMAGE="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/skillmap/backend:${{ env.IMAGE_TAG }}"
+          docker build -t $IMAGE ./backend
+          docker push $IMAGE
+
+  # ── 3. Deploy PROD (avec approbation manuelle) ───────────────
+  deploy-prod:
+    name: 🚀 Deploy Production
+    needs: build
+    runs-on: ubuntu-latest
+    # ⚠️ APPROBATION MANUELLE REQUISE
+    # GitHub Settings → Environments → production → Required reviewers
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 🔑 Auth GCP
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: 🏗️ Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: 🚀 Terraform Apply PROD
+        working-directory: terraform
+        run: |
+          terraform init
+          terraform apply -auto-approve \
+            -var-file=prod.tfvars \
+            -var="image_tag=${{ env.IMAGE_TAG }}"
+        env:
+          GOOGLE_CREDENTIALS: ${{ secrets.GCP_SA_KEY }}
+
+      - name: 🤖 Ansible Config PROD
+        run: |
+          pip install ansible --quiet
+          ansible-playbook ansible/playbook.yml
+        env:
+          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+          ENV: prod
+          FT_CLIENT_ID: ${{ secrets.FT_CLIENT_ID }}
+          FT_CLIENT_SECRET: ${{ secrets.FT_CLIENT_SECRET }}
+
+  # ── 4. Smoke Test + Notification ────────────────────────────
+  verify:
+    name: ✅ Verify & Notify
+    needs: deploy-prod
+    runs-on: ubuntu-latest
+    steps:
+      - name: 🔑 Auth GCP
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: 🩺 Health Check PROD
+        run: |
+          URL=$(gcloud run services describe ${{ env.SERVICE_NAME }} \
+            --region=${{ env.REGION }} \
+            --format='value(status.url)')
+          for i in 1 2 3 4 5; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" $URL/actuator/health)
+            if [ "$STATUS" = "200" ]; then
+              echo "✅ Production OK"
+              exit 0
+            fi
+            sleep 15
+          done
+          exit 1
+
+      - name: 📢 Notify Slack
+        if: success()
+        run: |
+          curl -s -X POST ${{ secrets.SLACK_WEBHOOK }} \
+            -H 'Content-type: application/json' \
+            -d '{
+              "text": "✅ *SkillMap Production déployé !*\nCommit: `${{ github.sha }}`\nBy: ${{ github.actor }}"
+            }'

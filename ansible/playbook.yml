@@ -1,0 +1,84 @@
+---
+- name: Configure SkillMap Secrets & Environment
+  hosts: localhost
+  connection: local
+  vars:
+    project: "{{ lookup('env', 'GCP_PROJECT_ID') }}"
+    env:     "{{ lookup('env', 'ENV') }}"
+    ft_client_id:     "{{ lookup('env', 'FT_CLIENT_ID') }}"
+    ft_client_secret: "{{ lookup('env', 'FT_CLIENT_SECRET') }}"
+
+  tasks:
+
+    # ── Créer les secrets France Travail ──────────────────────
+    - name: Create FT Client ID secret
+      command: >
+        gcloud secrets create FT_CLIENT_ID_{{ env | upper }}
+        --replication-policy=automatic
+        --project={{ project }}
+      ignore_errors: true  # Idempotent : ignore si déjà existant
+
+    - name: Inject FT Client ID value
+      shell: >
+        echo -n "{{ ft_client_id }}" |
+        gcloud secrets versions add FT_CLIENT_ID_{{ env | upper }}
+        --data-file=- --project={{ project }}
+      when: ft_client_id != ""
+      no_log: true  # Ne pas logger le secret
+
+    - name: Create FT Client Secret secret
+      command: >
+        gcloud secrets create FT_CLIENT_SECRET_{{ env | upper }}
+        --replication-policy=automatic
+        --project={{ project }}
+      ignore_errors: true
+
+    - name: Inject FT Client Secret value
+      shell: >
+        echo -n "{{ ft_client_secret }}" |
+        gcloud secrets versions add FT_CLIENT_SECRET_{{ env | upper }}
+        --data-file=- --project={{ project }}
+      when: ft_client_secret != ""
+      no_log: true
+
+    # ── Donner accès Cloud Run au Secret Manager ──────────────
+    - name: Get Cloud Run Service Account
+      command: >
+        gcloud run services describe skillmap-backend-{{ env }}
+        --region=europe-west1
+        --format=value(spec.template.spec.serviceAccountName)
+        --project={{ project }}
+      register: sa_result
+      ignore_errors: true
+
+    - name: Grant Secret Manager access to Cloud Run SA
+      command: >
+        gcloud projects add-iam-policy-binding {{ project }}
+        --member=serviceAccount:{{ sa_result.stdout }}
+        --role=roles/secretmanager.secretAccessor
+      when: sa_result.rc == 0 and sa_result.stdout != ""
+
+    # ── Smoke test ────────────────────────────────────────────
+    - name: Get Cloud Run URL
+      command: >
+        gcloud run services describe skillmap-backend-{{ env }}
+        --region=europe-west1
+        --format=value(status.url)
+        --project={{ project }}
+      register: backend_url
+      ignore_errors: true
+
+    - name: Health Check
+      uri:
+        url: "{{ backend_url.stdout }}/actuator/health"
+        status_code: 200
+        timeout: 30
+      register: health
+      when: backend_url.rc == 0 and backend_url.stdout != ""
+      retries: 5
+      delay: 15
+
+    - name: Afficher statut
+      debug:
+        msg: "✅ SkillMap {{ env }} — Health: {{ health.json.status | default('unknown') }}"
+      when: health is defined and health.json is defined
