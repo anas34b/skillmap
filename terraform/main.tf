@@ -1,6 +1,7 @@
 terraform {
   required_providers {
     google = { source = "hashicorp/google", version = "~> 5.0" }
+    random = { source = "hashicorp/random", version = "~> 3.6" }
   }
   # État stocké dans GCS — JAMAIS en local sur Git
   backend "gcs" {
@@ -16,6 +17,12 @@ provider "google" {
 
 # Numéro de projet → service account par défaut de Cloud Run (compute)
 data "google_project" "this" {}
+
+# Mot de passe DB généré automatiquement (jamais saisi par un humain ; stocké en Secret Manager)
+resource "random_password" "db" {
+  length  = 32
+  special = false
+}
 
 locals {
   # SA d'exécution par défaut des services Cloud Run
@@ -63,7 +70,7 @@ resource "google_sql_database" "skillmap" {
 resource "google_sql_user" "skillmap" {
   name     = "skillmap"
   instance = google_sql_database_instance.postgres.name
-  password = var.db_password
+  password = random_password.db.result
 }
 
 # ── Secrets (Secret Manager) ──────────────────────────────────
@@ -77,7 +84,7 @@ resource "google_secret_manager_secret" "db_password" {
 }
 resource "google_secret_manager_secret_version" "db_password" {
   secret      = google_secret_manager_secret.db_password.id
-  secret_data = var.db_password
+  secret_data = random_password.db.result
 }
 
 resource "google_secret_manager_secret" "ft_client_id" {
