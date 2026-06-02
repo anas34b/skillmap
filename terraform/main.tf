@@ -23,12 +23,9 @@ locals {
 }
 
 # ── Artifact Registry ─────────────────────────────────────────
-resource "google_artifact_registry_repository" "docker" {
-  repository_id = "skillmap"
-  format        = "DOCKER"
-  location      = var.region
-  description   = "SkillMap Docker images"
-}
+# NB : le dépôt Docker "skillmap" est créé (idempotent) par le job `build` de la CI
+# AVANT le push de l'image, pour éviter le poule/œuf (Cloud Run référence l'image).
+# Cloud Run ne dépend que du chemin d'image (chaîne), pas de cette ressource.
 
 # ── Cloud SQL PostgreSQL ───────────────────────────────────────
 resource "google_sql_database_instance" "postgres" {

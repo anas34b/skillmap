@@ -61,6 +61,13 @@ jobs:
       - name: 🐳 Configure Docker → Artifact Registry
         run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
 
+      - name: 📦 Ensure Artifact Registry repo exists
+        run: |
+          gcloud artifacts repositories describe skillmap --location=${{ env.REGION }} >/dev/null 2>&1 || \
+          gcloud artifacts repositories create skillmap \
+            --repository-format=docker --location=${{ env.REGION }} \
+            --description="SkillMap Docker images"
+
       - name: 🔨 Build & Push
         id: build
         run: |
