@@ -1,7 +1,6 @@
 // Environnement de PRODUCTION (build Firebase Hosting).
-// ⚠️ Remplacer l'URL par celle du backend Cloud Run après `terraform apply`
-//    (output `backend_url`), ex: https://skillmap-backend-staging-xxxx.a.run.app
+// apiBaseUrl = backend Cloud Run (staging).
 export const environment = {
   production: true,
-  apiBaseUrl: 'https://REMPLACER-PAR-URL-CLOUD-RUN/api',
+  apiBaseUrl: 'https://skillmap-backend-staging-r2soyhq3ua-ew.a.run.app/api',
 };

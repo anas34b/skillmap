@@ -1,47 +1,17 @@
 ---
-- name: Configure SkillMap Secrets & Environment
+- name: Configure SkillMap Cloud Run (post-déploiement)
   hosts: localhost
   connection: local
   vars:
     project: "{{ lookup('env', 'GCP_PROJECT_ID') }}"
     env:     "{{ lookup('env', 'ENV') }}"
-    ft_client_id:     "{{ lookup('env', 'FT_CLIENT_ID') }}"
-    ft_client_secret: "{{ lookup('env', 'FT_CLIENT_SECRET') }}"
+
+  # NB : les secrets (FT_CLIENT_ID/SECRET, DB_PASSWORD) sont créés et versionnés
+  # par Terraform (cf. terraform/main.tf), plus par Ansible — évite les doublons.
 
   tasks:
 
-    # ── Créer les secrets France Travail ──────────────────────
-    - name: Create FT Client ID secret
-      command: >
-        gcloud secrets create FT_CLIENT_ID_{{ env | upper }}
-        --replication-policy=automatic
-        --project={{ project }}
-      ignore_errors: true  # Idempotent : ignore si déjà existant
-
-    - name: Inject FT Client ID value
-      shell: >
-        echo -n "{{ ft_client_id }}" |
-        gcloud secrets versions add FT_CLIENT_ID_{{ env | upper }}
-        --data-file=- --project={{ project }}
-      when: ft_client_id != ""
-      no_log: true  # Ne pas logger le secret
-
-    - name: Create FT Client Secret secret
-      command: >
-        gcloud secrets create FT_CLIENT_SECRET_{{ env | upper }}
-        --replication-policy=automatic
-        --project={{ project }}
-      ignore_errors: true
-
-    - name: Inject FT Client Secret value
-      shell: >
-        echo -n "{{ ft_client_secret }}" |
-        gcloud secrets versions add FT_CLIENT_SECRET_{{ env | upper }}
-        --data-file=- --project={{ project }}
-      when: ft_client_secret != ""
-      no_log: true
-
-    # ── Donner accès Cloud Run au Secret Manager ──────────────
+    # ── Donner accès Cloud Run au Secret Manager (filet de sécurité) ──
     - name: Get Cloud Run Service Account
       command: >
         gcloud run services describe skillmap-backend-{{ env }}
@@ -56,6 +26,7 @@
         gcloud projects add-iam-policy-binding {{ project }}
         --member=serviceAccount:{{ sa_result.stdout }}
         --role=roles/secretmanager.secretAccessor
+        --condition=None
       when: sa_result.rc == 0 and sa_result.stdout != ""
 
     # ── Smoke test ────────────────────────────────────────────
