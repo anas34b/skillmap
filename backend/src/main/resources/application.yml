@@ -36,6 +36,11 @@ management:
   endpoint:
     health:
       show-details: when-authorized
+  # Redis = cache non critique (fail-open) et non provisionné en staging :
+  # on l'exclut du /actuator/health pour ne pas faire échouer la sonde Cloud Run.
+  health:
+    redis:
+      enabled: false
   metrics:
     export:
       prometheus:
