@@ -1,7 +1,6 @@
 # 🗺️ SkillMap — Le radar du marché tech en France
 
-[![Staging](https://github.com/YOUR_USERNAME/skillmap/actions/workflows/staging.yml/badge.svg)](https://github.com/YOUR_USERNAME/skillmap/actions/workflows/staging.yml)
-[![Production](https://github.com/YOUR_USERNAME/skillmap/actions/workflows/prod.yml/badge.svg)](https://github.com/YOUR_USERNAME/skillmap/actions/workflows/prod.yml)
+[![Staging](https://github.com/anas34b/skillmap/actions/workflows/staging.yml/badge.svg?branch=develop)](https://github.com/anas34b/skillmap/actions/workflows/staging.yml)
 [![Java](https://img.shields.io/badge/Java-21-blue?logo=java)](https://openjdk.org/projects/jdk/21/)
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.3-green?logo=spring)](https://spring.io/projects/spring-boot)
 [![Angular](https://img.shields.io/badge/Angular-17-red?logo=angular)](https://angular.io)
@@ -10,14 +9,8 @@
 > Analyse en temps réel des offres d'emploi tech françaises :  
 > quelles compétences sont les plus demandées, dans quelles villes, et comment les tendances évoluent.
 
-🔗 **Demo** → https://skillmap.web.app  
-📊 **API** → https://skillmap-backend-prod-xxx.run.app
-
----
-
-## 📸 Screenshots
-
-_(ajoute tes screenshots ici une fois le projet buildé)_
+🔗 **Dashboard (staging)** → https://skillmap-498218.web.app  
+📊 **API (staging)** → https://skillmap-backend-staging-r2soyhq3ua-ew.a.run.app
 
 ---
 
@@ -26,14 +19,16 @@ _(ajoute tes screenshots ici une fois le projet buildé)_
 | Couche | Technologie | Pourquoi |
 |--------|------------|----------|
 | Backend | Java 21 + Spring Boot 3.3 | Virtual Threads, Records, Pattern Matching |
-| Frontend | Angular 17+ | Signals, Standalone Components |
-| Base de données | PostgreSQL 16 | Robuste, bien supporté sur GCP |
-| Cache | Redis 7 | Rate limiting + cache insights IA |
-| Cloud | GCP Cloud Run | Serverless, scale to zero |
-| IaC | Terraform 1.7+ | Infrastructure as Code, multi-env |
-| Config | Ansible 2.16+ | Gestion secrets GCP Secret Manager |
-| CI/CD | GitHub Actions | Pipeline 5 étapes, staging auto + prod approuvé |
-| Sécurité | Spring Security 6 + OWASP | JWT, HTTPS, CORS, Rate Limiting |
+| Frontend | Angular 17 + Tailwind CSS | Signals, Standalone Components, dark theme + Chart.js |
+| Base de données | PostgreSQL 16 (Cloud SQL) | Robuste, bien supporté sur GCP |
+| Cache | Redis 7 | Rate limiting + cache insights (fail-open) |
+| Backend hosting | GCP Cloud Run | Serverless, scale to zero |
+| Frontend hosting | Firebase Hosting | CDN statique pour le SPA Angular |
+| IaC | Terraform 1.9 | Infrastructure as Code, state dans GCS |
+| Config | Ansible | Post-config Cloud Run (IAM, smoke test) |
+| CI/CD | GitHub Actions | Pipeline staging auto (push `develop`) |
+| Auth CI → GCP | Workload Identity Federation | **Sans clé** (OIDC), org policy interdit les clés SA |
+| Sécurité | Spring Security 6 + OWASP | JWT, HTTPS, CORS strict, Rate Limiting |
 
 ---
 
@@ -44,24 +39,17 @@ _(ajoute tes screenshots ici une fois le projet buildé)_
 | [France Travail API](https://francetravail.io/data/api/offres-emploi) | 700k+ offres officielles | OAuth2 gratuit |
 | [Arbeitnow](https://www.arbeitnow.com/api) | Offres Europe tech | Public, sans clé |
 
-> **Pourquoi ces sources ?** LinkedIn Jobs, Indeed, Glassdoor, WTTJ et APEC
-> ne proposent pas d'API publique accessible aux développeurs indépendants.
-> France Travail est la source officielle gouvernementale française.
-
 ---
 
 ## 🏗️ Architecture
 
 ```
 France Travail API ──┐
-                     ├──▶ FranceTravailCollector  ┐
-Arbeitnow API ───────┘    ArbeitnowCollector      ├──▶ SkillParser
-                                                   ┘         │
-                                                              ▼
-                                                        PostgreSQL
-                                                              │
-                          Angular Dashboard ◀── REST API ◀───┘
-                          (Firebase Hosting)   (Cloud Run)
+                     ├──▶ Collectors (cron) ──▶ SkillParser ──▶ PostgreSQL (Cloud SQL)
+Arbeitnow API ───────┘                                              │
+                                                                    ▼
+            Dashboard Angular ◀── REST /api ◀── Services ◀── Repositories JPA
+            (Firebase Hosting)     (Cloud Run)
 ```
 
 ---
@@ -69,104 +57,80 @@ Arbeitnow API ───────┘    ArbeitnowCollector      ├──▶ S
 ## 🛠️ Lancer en local
 
 ### Prérequis
-- Java 21+
-- Docker & Docker Compose
+- Java 21+, Docker & Docker Compose, Node 20+
 - (Optionnel) Compte France Travail pour les vraies données
 
 ```bash
 # 1. Clone
-git clone https://github.com/YOUR_USERNAME/skillmap.git
+git clone https://github.com/anas34b/skillmap.git
 cd skillmap
 
 # 2. Variables d'environnement (optionnel pour France Travail)
-cp .env.example .env
-# Éditer .env avec tes FT_CLIENT_ID et FT_CLIENT_SECRET
+cp .env.example .env        # éditer FT_CLIENT_ID / FT_CLIENT_SECRET
 
-# 3. Lancer PostgreSQL + Redis
-docker-compose up -d postgres redis
+# 3. Dépendances locales
+docker compose up -d postgres redis
 
-# 4. Lancer le backend
+# 4. Backend
 cd backend
 ./mvnw spring-boot:run -Dspring-boot.run.profiles=local
+#   → http://localhost:8080  (utiliser --server.port=8081 si 8080 est pris)
 
-# 5. Lancer le frontend (dans un autre terminal)
-cd frontend
-npm install
-ng serve
-
-# 6. Ouvrir http://localhost:4200
+# 5. Frontend (autre terminal)
+cd frontend && npm install && ng serve
+#   → http://localhost:4200
 ```
 
-### Avec Docker Compose complet
-```bash
-docker-compose up -d
-# Backend : http://localhost:8080
-# Frontend : http://localhost:4200
-```
+> En dev, le frontend pointe sur `http://localhost:8081/api` (cf. `frontend/src/environments/environment.ts`).
+> En prod, `environment.production.ts` pointe sur l'URL Cloud Run.
 
 ---
 
 ## 🌿 Git Flow
 
 ```
-main     ──▶ Production  (approbation manuelle requise)
-develop  ──▶ Staging     (déploiement automatique)
+main     ──▶ Production  (approbation manuelle)
+develop  ──▶ Staging     (déploiement automatique : backend + frontend)
 feature/ ──▶ Pull Request vers develop
 ```
+
+---
+
+## ☁️ Déploiement (CI/CD automatisé)
+
+Chaque **push sur `develop`** déclenche le workflow `staging.yml` (6 jobs) :
+
+```
+test → build (Docker → Artifact Registry) → infra (Terraform)
+     → configure (Ansible) → smoke (health check)
+     └─ frontend (ng build → Firebase Hosting)   [en parallèle]
+```
+
+L'authentification CI → GCP se fait **sans clé de service account** via **Workload Identity Federation**
+(une org policy interdit `iam.disableServiceAccountKeyCreation`).
+
+### Secrets GitHub requis
+| Secret | Rôle |
+|--------|------|
+| `GCP_PROJECT_ID` | ID du projet GCP |
+| `GCP_WIF_PROVIDER` | Provider Workload Identity (chemin complet) |
+| `GCP_SA_EMAIL` | Email du Service Account `github-ci@…` |
+| `FT_CLIENT_ID` / `FT_CLIENT_SECRET` | Identifiants France Travail |
+
+📖 **Procédure complète de mise en place** (projet GCP, WIF, Firebase, secrets, infra) :
+voir **[docs/DEPLOIEMENT.md](docs/DEPLOIEMENT.md)**.
 
 ---
 
 ## 🔐 Sécurité
 
 - ✅ JWT stateless (Spring Security 6 OAuth2 Resource Server)
-- ✅ HTTPS forcé sur tous les endpoints
-- ✅ CORS strict : seulement les domaines Firebase autorisés
-- ✅ Rate Limiting : 100 req/min par IP (Redis)
-- ✅ Validation @Valid sur tous les inputs
-- ✅ SQL Injection impossible (JPA/Hibernate)
+- ✅ HTTPS (Cloud Run + Firebase Hosting)
+- ✅ CORS strict (domaines Firebase autorisés via `FRONTEND_URL_STAGING`)
+- ✅ Rate Limiting : 100 req/min par IP (Redis, fail-open)
 - ✅ Secrets dans GCP Secret Manager (jamais dans le code)
+- ✅ CI sans clé (Workload Identity Federation)
 - ✅ Docker : utilisateur non-root
-
----
-
-## ☁️ Déploiement GCP
-
-### Prérequis GCP
-```bash
-# 1. Créer le projet GCP
-gcloud projects create skillmap-project
-
-# 2. Activer les APIs
-gcloud services enable run.googleapis.com \
-  sqladmin.googleapis.com \
-  artifactregistry.googleapis.com \
-  secretmanager.googleapis.com
-
-# 3. Créer le bucket Terraform state
-gsutil mb gs://skillmap-tfstate
-
-# 4. Créer un Service Account pour GitHub Actions
-gcloud iam service-accounts create github-actions \
-  --display-name="GitHub Actions"
-```
-
-### Secrets GitHub (Settings → Secrets)
-```
-GCP_PROJECT_ID     → ton project ID GCP
-GCP_SA_KEY         → JSON du Service Account
-FT_CLIENT_ID       → Client ID France Travail
-FT_CLIENT_SECRET   → Client Secret France Travail
-SLACK_WEBHOOK      → URL webhook Slack (optionnel)
-```
-
-### Déployer
-```bash
-# Push sur develop → staging automatique
-git push origin develop
-
-# Merge sur main → prod (approbation requise dans GitHub)
-git checkout main && git merge develop && git push
-```
 
 ---
 
@@ -174,14 +138,7 @@ git checkout main && git merge develop && git push
 
 ```bash
 cd backend
-
-# Tests unitaires
-./mvnw test
-
-# Tests avec coverage
-./mvnw test jacoco:report
-
-# Rapport : target/site/jacoco/index.html
+./mvnw test                 # JUnit 5 + Mockito (+ Testcontainers pour l'intégration)
 ```
 
 ---
@@ -190,7 +147,7 @@ cd backend
 
 | Méthode | Endpoint | Description |
 |---------|----------|-------------|
-| GET | `/api/skills?limit=20&month=2026-06` | Top compétences du mois |
+| GET | `/api/skills?limit=20&month=2026-06&category=LANGUAGE` | Top compétences du mois |
 | GET | `/api/trends?skill=Java&months=6` | Évolution mensuelle |
 | GET | `/api/cities?skill=Angular&limit=10` | Répartition géographique |
 | GET | `/api/insights` | Analyse IA (cache 1h) |
@@ -202,9 +159,9 @@ cd backend
 
 ## 👤 Auteur
 
-**Ton Nom** — [LinkedIn](https://linkedin.com/in/tonprofil) · [GitHub](https://github.com/tonusername)
+**Anas Daoui** — [GitHub](https://github.com/anas34b)
 
 ---
 
-_Projet réalisé pour démontrer une architecture full-stack moderne :  
-Java 21 (Virtual Threads), Spring Boot 3, Angular 17, GCP, Terraform, Ansible, GitHub Actions CI/CD._
+_Projet full-stack moderne : Java 21 (Virtual Threads), Spring Boot 3, Angular 17,
+GCP (Cloud Run + Cloud SQL + Firebase), Terraform, Ansible, GitHub Actions CI/CD (WIF)._
